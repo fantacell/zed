@@ -206,7 +206,7 @@ pub fn line_beginning(
     }
 }
 
-/// Returns the last indented position on a given line.
+/// Returns the last indented position on a given line, but the start if the line is whitespace only.
 /// If `stop_at_soft_boundaries` is true, the returned [`DisplayPoint`] is that of a
 /// displayed line (e.g. if there's soft wrap it's gonna be returned),
 /// otherwise it's always going to be a start of a logical line.
@@ -218,13 +218,24 @@ pub fn indented_line_beginning(
 ) -> DisplayPoint {
     let point = display_point.to_point(map);
     let soft_line_start = map.clip_point(DisplayPoint::new(display_point.row(), 0), Bias::Right);
-    let indent_start = Point::new(
-        point.row,
-        map.buffer_snapshot
-            .indent_size_for_line(MultiBufferRow(point.row))
-            .len,
-    )
-    .to_display_point(map);
+    let classifier = map
+        .buffer_snapshot
+        .char_classifier_at(display_point.to_offset(map, Bias::Left));
+    let row_empty = map
+        .line(display_point.row())
+        .chars()
+        .all(|c| classifier.is_whitespace(c));
+    let indent_start = if row_empty {
+        display_point
+    } else {
+        Point::new(
+            point.row,
+            map.buffer_snapshot
+                .indent_size_for_line(MultiBufferRow(point.row))
+                .len,
+        )
+        .to_display_point(map)
+    };
     let line_start = map.prev_line_boundary(point).1;
 
     if stop_at_soft_boundaries && soft_line_start > indent_start && display_point != soft_line_start
